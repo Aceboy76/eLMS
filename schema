@@ -1,0 +1,264 @@
+Table users { /* Entity table - stores user accounts */ }
+Table students { /* Entity table - extends users with student-specific data */ }
+Table professors { /* Entity table - extends users with professor-specific data */ }
+Table courses { /* Entity table - main academic programs */ }
+Table subjects { /* Entity table - individual courses within programs */ }
+Table learning_materials { /* Entity table - educational content */ }
+Table material_files { /* Entity table - file attachments */ }
+
+Table roles { /* Reference table - fixed set of user roles */ }
+Enum period_type { /* Reference values - assessment periods */ }
+Enum term_type { /* Reference values - academic terms */ }
+Enum student_type { /* Reference values - student classifications */ }
+Enum material_type { /* Reference values - content types */ }
+Enum enrollment_status { /* Reference values - enrollment states */ }
+Enum subject_type { /* Reference values - subject states */ }
+Table academic_years { /* Reference table - academic year definitions */ }
+
+Table professor_subjects { /* Pivot table - professors to subjects assignment */ }
+Table enrollments { /* Pivot table - students to courses enrollment */ }
+
+Table terms { /* Supporting table - academic term details */ }
+Table subject_periods { /* Supporting table - subject assessment periods */ }
+Table grades { /* Supporting table - student performance records */ }
+Table topics { /* Supporting table - subject content organization */ }
+
+// These have characteristics of both entity and supporting tables:
+Table subjects { /* Hybrid - both entity (course content) and relates to terms */ }
+Table terms { /* Hybrid - both reference (time periods) and entity (has dates) */ }
+//// -- LEVEL 1
+//// -- Core Tables and Enums
+
+Enum period_type {
+  Prelim
+  Midterm
+  Prefinal
+  Final
+}
+
+Enum term_type {
+  First
+  Second
+  Summer
+}
+Enum student_type {
+  Regular
+  Irregular
+}
+
+Enum material_type {
+  module
+  activity
+  quiz
+  assignment
+  reference
+}
+
+Enum subject_type {
+  Required
+  Elective
+}
+
+Enum enrollment_status {
+  Enrolled
+  Completed
+  Dropped
+}
+
+Table users {
+  id int [pk, increment]
+  email varchar [not null, unique]
+  password_hash varchar [not null]
+  role_id int [not null]
+  firstname varchar [not null]
+  middlename varchar
+  lastname varchar [not null]
+  extension varchar
+  created_at datetime [default: `now()`]
+  updated_at datetime [default: `now()`]
+}
+
+Table roles {
+  id int [pk, increment]
+  description varchar [not null, unique]
+}
+
+//// -- LEVEL 2
+//// -- Academic Structure
+
+Table academic_years {
+  id int [pk, increment]
+  name varchar [not null, unique] // e.g. "2023-2024"
+  start_date date [not null]
+  end_date date [not null]
+}
+
+Table terms {
+  id int [pk, increment]
+  academic_year_id int [not null]
+  term term_type [not null]
+  start_date date [not null]
+  end_date date [not null]
+}
+
+Table courses {
+  id int [pk, increment]
+  code varchar [not null, unique]
+  name varchar [not null]
+  units decimal [not null]
+  duration_years int [not null, default: 1]
+}
+
+Table subjects {
+  id int [pk, increment]
+  code varchar [not null]
+  name varchar [not null]
+  description text
+  course_id int [not null]
+  term_id int [not null] // which term this subject is taught in
+  units decimal [not null]
+  type subject_type [default: 'Required'] // Add this line
+  elective_group varchar [null] // Optional: for grouping electives
+
+//// -- LEVEL 3
+//// -- User Roles
+
+
+Table students {
+  id int [pk, increment]
+  student_code bigint [not null]
+  year_level varchar [not null]
+  user_id int [not null, unique]
+  admission_date date [not null]
+  type student_type [default: 'Regular']
+}
+Table professors {
+  id int [pk, increment]
+  title varchar
+  user_id int [not null, unique]
+  department varchar
+}
+
+//// -- LEVEL 4
+//// -- Academic Relationships
+
+Table enrollments {
+  id int [pk, increment]
+  student_id int [not null]
+  course_id int [not null]
+  term_id int [not null]
+  enrollment_date date [not null]
+  status enrollment_status [default: 'Enrolled']
+}
+
+Table professor_subjects {
+  professor_id int [not null]
+  subject_id int [not null]
+  term_id int [not null]
+}
+
+Table subject_periods {
+  id int [pk, increment]
+  subject_id int [not null]
+  period period_type [not null]
+  start_date date
+  end_date date
+}
+
+Table grades {
+  enrollment_id int [not null]
+  subject_id int [not null]
+  period period_type [not null]
+  grade decimal
+  remarks text
+  date_recorded date [not null]
+}
+
+//// -- LEVEL 5
+//// -- Learning Content
+
+Table topics {
+  id int [pk, increment]
+  subject_period_id int [not null]
+  name varchar [not null]
+  description text
+  display_order int [default: 0]
+  created_at datetime [default: `now()`]
+  updated_at datetime [default: `now()`]
+}
+
+Table learning_materials {
+  id int [pk, increment]
+  topic_id int [not null]
+  type material_type [not null]
+  title varchar [not null]
+  description text
+  uploader_id int [not null]  // professor who uploaded
+
+  // Grading fields (for quiz/activity/assignment)
+  max_score decimal
+  passing_score decimal [note: "For quizzes"]
+  due_date date
+  score int
+
+  created_at datetime [default: `now()`]
+  updated_at datetime [default: `now()`]
+}
+
+//// -- Material files table (for all file attachments)
+Table material_files {
+  id int [pk, increment]
+  material_id int [not null]
+
+  // File content
+  file_url varchar [not null]
+  display_name varchar [not null]
+  file_type varchar [not null]  // pdf/docx/etc
+  file_size int  // in bytes
+
+  // Type-specific roles
+  is_question_file boolean [default: false, note: "For quiz questions"]
+  is_answer_key boolean [default: false, note: "For quiz answers"]
+  is_rubric boolean [default: false, note: "For assignments"]
+
+  created_at datetime [default: `now()`]
+}
+
+
+//// -- Updated relationships
+Ref: material_files.material_id > learning_materials.id [delete: cascade]
+//// -- RELATIONSHIPS SECTION --
+
+// User relationships
+Ref: users.role_id > roles.id
+Ref: students.user_id - users.id [delete: cascade]
+Ref: professors.user_id - users.id [delete: cascade]
+
+// Academic year relationships
+Ref: terms.academic_year_id > academic_years.id [delete: cascade]
+
+// Course relationships
+Ref: subjects.course_id > courses.id [delete: cascade]
+Ref: subjects.term_id > terms.id
+
+// Enrollment relationships
+Ref: enrollments.student_id < students.id
+Ref: enrollments.course_id < courses.id
+Ref: enrollments.term_id < terms.id
+
+// Professor subject assignments
+Ref: professor_subjects.professor_id > professors.id [delete: cascade]
+Ref: professor_subjects.subject_id <> subjects.id [delete: cascade]
+Ref: professor_subjects.term_id < terms.id
+
+// Subject periods
+Ref: subject_periods.subject_id > subjects.id [delete: cascade]
+
+// Grade relationships
+Ref: grades.enrollment_id > enrollments.id
+Ref: grades.subject_id - subjects.id
+
+// Learning content relationships
+Ref: topics.subject_period_id > subject_periods.id [delete: cascade]
+Ref: learning_materials.topic_id < topics.id [delete: cascade]
+Ref: learning_materials.uploader_id - professors.id
